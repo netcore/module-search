@@ -1,0 +1,28 @@
+{
+    "name": "netcore/module-search",
+    "description": "Search module.",
+    "type": "module",
+    "license": "MIT",
+    "homepage": "http://netcore.lv",
+    "authors": [
+        {
+            "name": "Viktors Ņikiforovs",
+            "email": "viktors.nikiforovs@netcore.lv"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\Search\\Providers\\SearchServiceProvider"
+            ],
+            "aliases": {
+
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Search\\": ""
+        }
+    }
+}
