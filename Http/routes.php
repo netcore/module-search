@@ -7,10 +7,6 @@ Route::group([
     'namespace'  => 'Modules\Search\Http\Controllers\Admin',
 ], function () {
 
-    Route::get('/test', function () {
-        dd(
-            search()->of(\App\User::class)->find('My awesome keyword.')
-        );
-    });
+    // No routes available at the moment.
 
 });

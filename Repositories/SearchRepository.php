@@ -90,13 +90,13 @@ class SearchRepository
     }
 
     /**
-     * @param SearchableContract|\Illuminate\Database\Eloquent\Builder $model
+     * @param SearchableContract|\Illuminate\Database\Eloquent\Model $model
      * @return array
      */
     public function getResults(SearchableContract $model): array
     {
         $config = $model->getSearchConfig();
-        $query = $model->getQuery();
+        $query = $model->newQuery();
 
         $this->buildBaseTableWheres($query, $config);
         $this->buildRelationalWheres($query, $config);
@@ -117,16 +117,13 @@ class SearchRepository
     /**
      * Build query for base model columns.
      *
-     * @param Builder $query
+     * @param $query
      * @param array $config
      */
-    private function buildBaseTableWheres(Builder &$query, array $config = []): void
+    private function buildBaseTableWheres(&$query, array $config = []): void
     {
-        $columns = array_get($config, 'columns');
-
-        if (!$columns) {
-            return;
-        }
+        // Column wheres
+        $columns = array_get($config, 'columns', []);
 
         foreach ($columns as $column) {
             $isStrict = substr($column, 0, 1) === '!';
@@ -139,22 +136,66 @@ class SearchRepository
 
             $query->orWhere($column, $operator, $binding);
         }
+
+        // Constant wheres
+        $constantWheres = array_get($config, 'wheres', []);
+
+        foreach ($constantWheres as $column => $value) {
+            $query->where($column, '=', $value);
+        }
+
+        if (array_get($config, 'with_trashed')) {
+            $query->withTrashed();
+        }
     }
 
     /**
      * Build query for relations.
      *
-     * @param Builder $builder
+     * @param $query
      * @param array $config
      */
-    private function buildRelationalWheres(Builder &$builder, array $config = []): void
+    private function buildRelationalWheres(&$query, array $config = []): void
     {
-        $relations = array_get($config, 'relations');
+        $relations = array_get($config, 'relations', []);
 
-        if (!$relations) {
-            return;
+        foreach ($relations as $relationName => $relation) {
+            $query->orWhereHas($relationName, function ($subq) use ($relation) {
+                foreach (array_get($relation, 'columns', []) as $column) {
+                    $subq->where($column, 'LIKE', '%' . $this->query . '%');
+                }
+
+                // Recursive relations
+                if ($subRelations = array_get($relation, 'relations')) {
+                    $this->buildRelationalWheres($subq, ['relations' => $subRelations]);
+                }
+            });
         }
+    }
 
-        // @TODO ..
+    /**
+     * Set the current page.
+     *
+     * @param int $page
+     * @return $this
+     */
+    public function setPage(int $page)
+    {
+        $this->currentPage = $page;
+
+        return $this;
+    }
+
+    /**
+     * Set records per page.
+     *
+     * @param int $perPage
+     * @return $this
+     */
+    public function setRecordsPerPage(int $perPage)
+    {
+        $this->recordsPerPage = $perPage;
+
+        return $this;
     }
 }
