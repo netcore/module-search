@@ -44,6 +44,13 @@ class SearchRepository
     protected $returnAsCollection = false;
 
     /**
+     * Determine if we need to return paginator instance.
+     *
+     * @var bool
+     */
+    protected $withPaginator = false;
+
+    /**
      * Search query/keyword.
      *
      * @var string
@@ -101,6 +108,18 @@ class SearchRepository
     }
 
     /**
+     * Set to return with paginator instance.
+     *
+     * @return $this
+     */
+    public function withPaginator()
+    {
+        $this->withPaginator = true;
+
+        return $this;
+    }
+
+    /**
      * Set the searchable models.
      *
      * @param array|mixed $models
@@ -136,7 +155,7 @@ class SearchRepository
      * @param $model
      * @return array|Collection
      */
-    public function getResults($model)
+    protected function getResults($model)
     {
         $searchable = $this->searchableModels[$model];
 
@@ -145,9 +164,6 @@ class SearchRepository
         /** @var $query Builder */
         $query = $searchable['query'];
         $this->buildBaseTableWheres($query, $config);
-
-        // Get records for given page
-        $query->forPage($this->currentPage, $this->recordsPerPage);
 
         // Log SQL Query with bindings
         $sqlQuery = $query->toSql();
@@ -159,7 +175,11 @@ class SearchRepository
         }
 
         // Fetch records
-        $records = $query->get();
+        if ($this->withPaginator) {
+            $records = $query->paginate($this->recordsPerPage, ['*'], 'page', $this->currentPage);
+        } else {
+            $records = $query->forPage($this->currentPage, $this->recordsPerPage)->get();
+        }
 
         $totalCount = $query->count();
         $totalPages = (int)ceil($totalCount / $this->recordsPerPage) ?? 1;
