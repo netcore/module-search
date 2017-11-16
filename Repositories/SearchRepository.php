@@ -2,7 +2,9 @@
 
 namespace Modules\Search\Repositories;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 
 class SearchRepository
 {
@@ -21,11 +23,25 @@ class SearchRepository
     protected $currentPage = 1;
 
     /**
+     * Determine if sql output is needed.
+     *
+     * @var bool
+     */
+    protected $logSqlQueries = false;
+
+    /**
      * Searchable models store.
      *
      * @var array
      */
     protected $searchableModels = [];
+
+    /**
+     * Determine if we need to return results as collection.
+     *
+     * @var bool
+     */
+    protected $returnAsCollection = false;
 
     /**
      * Search query/keyword.
@@ -56,6 +72,30 @@ class SearchRepository
     public function setRecordsPerPage(int $perPage)
     {
         $this->recordsPerPage = $perPage;
+
+        return $this;
+    }
+
+    /**
+     * Enable queries logging.
+     *
+     * @return $this
+     */
+    public function withLoggedQueries()
+    {
+        $this->logSqlQueries = true;
+
+        return $this;
+    }
+
+    /**
+     * Set to return data as collection.
+     *
+     * @return $this
+     */
+    public function returnAsCollection()
+    {
+        $this->returnAsCollection = true;
 
         return $this;
     }
@@ -94,54 +134,59 @@ class SearchRepository
      * Get the results.
      *
      * @param $model
-     * @return array
+     * @return array|Collection
      */
-    public function getResults($model): array
+    public function getResults($model)
     {
         $searchable = $this->searchableModels[$model];
 
         $config = $searchable['config'];
-        $query = $searchable['query'];
 
+        /** @var $query Builder */
+        $query = $searchable['query'];
         $this->buildBaseTableWheres($query, $config);
-        $this->buildRelationalWheres($query, $config);
 
         // Get records for given page
-        $records = $query->forPage($this->currentPage, $this->recordsPerPage)->get();
+        $query->forPage($this->currentPage, $this->recordsPerPage);
+
+        // Log SQL Query with bindings
+        $sqlQuery = $query->toSql();
+        $sqlBindings = $query->getBindings();
+
+        foreach ($sqlBindings as $binding) {
+            $value = is_numeric($binding) ? $binding : "'" . $binding . "'";
+            $sqlQuery = preg_replace('/\?/', $value, $sqlQuery, 1);
+        }
+
+        // Fetch records
+        $records = $query->get();
 
         $totalCount = $query->count();
         $totalPages = (int)ceil($totalCount / $this->recordsPerPage) ?? 1;
 
-        return [
+        $data = [];
+
+        if ($this->logSqlQueries) {
+            $data['query'] = $sqlQuery;
+        }
+
+        $data += [
             'total_items' => $totalCount,
             'total_pages' => $totalPages,
             'results'     => $records,
         ];
+
+        return $this->returnAsCollection ? collect($data) : $data;
     }
 
     /**
      * Build query for base model columns.
      *
-     * @param $query
+     * @param Builder $query
      * @param array $config
      */
-    private function buildBaseTableWheres(&$query, array $config = []): void
+    private function buildBaseTableWheres(Builder &$query, array $config = []): void
     {
-        // Column wheres
-        $columns = array_get($config, 'columns', []);
-
-        foreach ($columns as $column) {
-            $isStrict = substr($column, 0, 1) === '!';
-            $operator = $isStrict ? '=' : 'LIKE';
-            $binding = $isStrict ? $this->query : '%' . $this->query . '%';
-
-            if ($isStrict) {
-                $column = substr($column, 1);
-            }
-
-            $query->orWhere($column, $operator, $binding);
-        }
-
         // Constant wheres
         $constantWheres = array_get($config, 'wheres', []);
 
@@ -149,8 +194,33 @@ class SearchRepository
             $query->where($column, '=', $value);
         }
 
+        // Column wheres
+        $columns = array_get($config, 'columns', []);
+
+        // Wrap "or where's"
+        if (count($columns)) {
+            $query->where(function (Builder $whereSubQuery) use ($columns, $config) {
+                foreach ($columns as $column) {
+                    $isStrict = substr($column, 0, 1) === '!';
+                    $operator = $isStrict ? '=' : 'LIKE';
+                    $binding = $isStrict ? $this->query : '%' . $this->query . '%';
+
+                    if ($isStrict) {
+                        $column = substr($column, 1);
+                    }
+
+                    $whereSubQuery->orWhere($column, $operator, $binding);
+                }
+
+                // Relational wheres
+                $this->buildRelationalWheres($whereSubQuery, $config);
+
+                return $whereSubQuery;
+            });
+        }
+
         // Soft deletes disable
-        $classUsesSoftDeletes = in_array(SoftDeletes::class ,class_uses_recursive($query->getModel()));
+        $classUsesSoftDeletes = in_array(SoftDeletes::class, class_uses_recursive($query->getModel()));
 
         if (array_get($config, 'with_trashed') && $classUsesSoftDeletes) {
             $query->withTrashed();
@@ -160,30 +230,34 @@ class SearchRepository
     /**
      * Build query for relations.
      *
-     * @param $query
+     * @param Builder $query
      * @param array $config
      */
-    private function buildRelationalWheres(&$query, array $config = []): void
+    private function buildRelationalWheres(Builder &$query, array $config = []): void
     {
         $relations = array_get($config, 'relations', []);
 
         foreach ($relations as $relationName => $relation) {
-            $query->orWhereHas($relationName, function ($subq) use ($relation) {
+            $query->orWhereHas($relationName, function (Builder $subQuery) use ($relation) {
 
-                // Columns search
-                foreach (array_get($relation, 'columns', []) as $column) {
-                    $subq->where($column, 'LIKE', '%' . $this->query . '%');
-                }
-
-                // Add strict wheres
+                // Strict wheres
                 foreach (array_get($relation, 'wheres', []) as $column => $where) {
-                    $subq->where($column, $where);
+                    $subQuery->where($column, $where);
                 }
 
-                // Recursive relations
-                if ($subRelations = array_get($relation, 'relations')) {
-                    $this->buildRelationalWheres($subq, ['relations' => $subRelations]);
-                }
+                // Columns and relations
+                $subQuery->where(function (Builder $wrappedSubQuery) use ($relation) {
+                    foreach (array_get($relation, 'columns', []) as $column) {
+                        $wrappedSubQuery->orWhere($column, 'LIKE', '%' . $this->query . '%');
+                    }
+
+                    // Nested relations
+                    if ($subRelations = array_get($relation, 'relations')) {
+                        $this->buildRelationalWheres($wrappedSubQuery, ['relations' => $subRelations]);
+                    }
+
+                    return $wrappedSubQuery;
+                });
             });
         }
     }
@@ -203,7 +277,7 @@ class SearchRepository
                 if ($isLast) {
                     $key .= '.wheres.' . $part;
                 } else {
-                    $key .= ($i == 1 ? '' : '.' ) . 'relations.' . $part;
+                    $key .= ($i == 1 ? '' : '.') . 'relations.' . $part;
                 }
 
                 $i++;
@@ -222,9 +296,9 @@ class SearchRepository
      * Find results by given keyword.
      *
      * @param string $keyword
-     * @return array
+     * @return array|Collection
      */
-    public function find(string $keyword): array
+    public function find(string $keyword)
     {
         $this->query = $keyword;
 
@@ -237,6 +311,6 @@ class SearchRepository
             $results[$searchableModel['config']['key']] = $this->getResults($key);
         }
 
-        return $results;
+        return $this->returnAsCollection ? collect($results) : $results;
     }
 }
