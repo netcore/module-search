@@ -2,6 +2,8 @@
 
 namespace Modules\Search\Repositories;
 
+use Carbon\Carbon;
+use DB;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
@@ -49,6 +51,20 @@ class SearchRepository
      * @var bool
      */
     protected $withPaginator = false;
+
+    /**
+     * Determine if search query logging is enabled.
+     *
+     * @var bool
+     */
+    protected $searchQueryLogging;
+
+    /**
+     * Total counter of found results.
+     *
+     * @var int
+     */
+    protected $totalResultsFound = 0;
 
     /**
      * Search query/keyword.
@@ -120,6 +136,18 @@ class SearchRepository
     }
 
     /**
+     * Disable search query logging to DB.
+     *
+     * @return $this
+     */
+    public function disableSearchQueryLogging()
+    {
+        $this->searchQueryLogging = false;
+
+        return $this;
+    }
+
+    /**
      * Set the searchable models.
      *
      * @param array|mixed $models
@@ -183,6 +211,8 @@ class SearchRepository
 
         $totalCount = $query->count();
         $totalPages = (int)ceil($totalCount / $this->recordsPerPage) ?? 1;
+
+        $this->totalResultsFound += $totalCount;
 
         $data = [];
 
@@ -331,6 +361,26 @@ class SearchRepository
             $results[$searchableModel['config']['key']] = $this->getResults($key);
         }
 
+        // Log search query
+        if ($this->logsEnabled() && is_null($this->searchQueryLogging)) {
+            DB::table('netcore_search__search_logs')->insert([
+                'query'         => $keyword,
+                'results_found' => $this->totalResultsFound,
+                'created_at'    => Carbon::now(),
+                'updated_at'    => Carbon::now(),
+            ]);
+        }
+
         return $this->returnAsCollection ? collect($results) : $results;
+    }
+
+    /**
+     * Determine if search query logging is enabled.
+     *
+     * @return bool
+     */
+    public function logsEnabled(): bool
+    {
+        return (bool)config('netcore.module-search.enable_search_logs');
     }
 }

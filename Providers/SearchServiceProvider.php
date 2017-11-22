@@ -21,9 +21,9 @@ class SearchServiceProvider extends ServiceProvider
     public function boot()
     {
         //$this->registerTranslations();
-        //$this->registerConfig();
+        $this->registerConfig();
         $this->registerViews();
-        //$this->loadMigrationsFrom(__DIR__ . '/../Database/Migrations');
+        $this->loadMigrationsFrom(__DIR__ . '/../Database/Migrations');
     }
 
     /**

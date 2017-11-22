@@ -2,71 +2,33 @@
 
 namespace Modules\Search\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use DataTables;
+use DB;
 use Illuminate\Routing\Controller;
 
 class SearchController extends Controller
 {
     /**
-     * Display a listing of the resource.
-     * @return Response
+     * Display a listing of search query logs.
+     *
+     * @return \Illuminate\View\View
      */
     public function index()
     {
+        search()->of(\App\User::class)->find('Admin');
+
         return view('search::index');
     }
 
     /**
-     * Show the form for creating a new resource.
-     * @return Response
+     * Search logs pagination.
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function create()
+    public function pagination()
     {
-        return view('search::create');
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     * @param  Request $request
-     * @return Response
-     */
-    public function store(Request $request)
-    {
-    }
-
-    /**
-     * Show the specified resource.
-     * @return Response
-     */
-    public function show()
-    {
-        return view('search::show');
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     * @return Response
-     */
-    public function edit()
-    {
-        return view('search::edit');
-    }
-
-    /**
-     * Update the specified resource in storage.
-     * @param  Request $request
-     * @return Response
-     */
-    public function update(Request $request)
-    {
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     * @return Response
-     */
-    public function destroy()
-    {
+        return DataTables::of(
+            DB::table('netcore_search__search_logs')
+        )->make(true);
     }
 }

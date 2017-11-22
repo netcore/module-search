@@ -1,5 +1,10 @@
 <?php
 
 return [
-    'name' => 'Search'
+    'name' => 'Search',
+
+    /**
+     * Enable/disable search query logging.
+     */
+    'enable_search_logs' => false,
 ];
