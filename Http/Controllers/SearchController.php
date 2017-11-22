@@ -15,8 +15,6 @@ class SearchController extends Controller
      */
     public function index()
     {
-        search()->of(\App\User::class)->find('Admin');
-
         return view('search::index');
     }
 
