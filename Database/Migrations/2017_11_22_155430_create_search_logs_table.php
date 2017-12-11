@@ -17,11 +17,23 @@ class CreateSearchLogsTable extends Migration
             return;
         }
 
-        Schema::create('netcore_search__search_logs', function (Blueprint $table) {
+        $usersTable = config('netcore.module-admin.user.table', 'users');
+        $logUserIds = config('netcore.module-search.log_user_ids', false);
+
+        Schema::create('netcore_search__search_logs', function (Blueprint $table) use ($usersTable, $logUserIds) {
             $table->increments('id');
+
+            if (Schema::hasTable($usersTable) && $logUserIds) {
+                $table->unsignedInteger('user_id')->nullable();
+            }
+
             $table->string('query');
             $table->unsignedInteger('results_found')->default(0);
             $table->timestamps();
+
+            if (Schema::hasTable($usersTable) && $logUserIds) {
+                $table->foreign('user_id', 'uid_foreign')->references('id')->on($usersTable)->onDelete('SET NULL');
+            }
         });
     }
 
@@ -32,10 +44,6 @@ class CreateSearchLogsTable extends Migration
      */
     public function down()
     {
-        if (!config('netcore.module-search.enable_search_logs')) {
-            return;
-        }
-
         Schema::dropIfExists('netcore_search__search_logs');
     }
 }

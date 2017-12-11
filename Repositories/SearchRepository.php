@@ -7,6 +7,7 @@ use DB;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
+use Modules\Search\Models\SearchLog;
 
 class SearchRepository
 {
@@ -363,11 +364,9 @@ class SearchRepository
 
         // Log search query
         if ($this->logsEnabled() && is_null($this->searchQueryLogging)) {
-            DB::table('netcore_search__search_logs')->insert([
+            SearchLog::create([
                 'query'         => $keyword,
                 'results_found' => $this->totalResultsFound,
-                'created_at'    => Carbon::now(),
-                'updated_at'    => Carbon::now(),
             ]);
         }
 
@@ -382,5 +381,15 @@ class SearchRepository
     public function logsEnabled(): bool
     {
         return (bool)config('netcore.module-search.enable_search_logs');
+    }
+
+    /**
+     * Determine if user_id logging is enabled.
+     *
+     * @return bool
+     */
+    public function logUserId()
+    {
+        return (bool)config('netcore.module-search.log_user_ids');
     }
 }

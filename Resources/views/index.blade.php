@@ -17,6 +17,9 @@
                 <thead>
                     <tr>
                         <th>Search query</th>
+                        @if(search()->logUserId())
+                            <th>User</th>
+                        @endif
                         <th>Results found</th>
                         <th>Logged at</th>
                     </tr>
@@ -39,19 +42,48 @@
                 return false;
             }
 
+            var columns = [];
+
+            columns.push({
+                data: 'query',
+                name: 'query',
+                orderable: true,
+                searchable: true
+            });
+
+            @if(search()->logUserId())
+                columns.push({
+                    data: 'user',
+                    name: 'user.{{ $userNameColumn }}',
+                    orderable: true,
+                    searchable: true
+                });
+            @endif
+
+            columns.push({
+                data: 'results_found',
+                name: 'results_found',
+                orderable: true,
+                searchable: true
+            });
+
+            columns.push({
+                data: 'created_at',
+                name: 'created_at',
+                orderable: true,
+                searchable: true
+            });
+
             datatable.dataTable({
                 processing: true,
                 serverSide: true,
                 ajax: '{{ route('search::pagination') }}',
                 responsive: true,
-                columns: [
-                    {data: 'query', name: 'query', orderable: true, searchable: true},
-                    {data: 'results_found', name: 'results_found', orderable: true, searchable: true},
-                    {data: 'created_at', name: 'created_at', orderable: true, searchable: true},
-                ],
-                order: [[2, 'desc']]
+                columns: columns,
+                order: [[{{ search()->logUserId() ? 3 : 2 }}, 'desc']]
             });
 
+            $('.dataTables_wrapper .table-caption').text('Search logs');
             $('.dataTables_wrapper .dataTables_filter input').attr('placeholder', 'Find query');
         });
     </script>
