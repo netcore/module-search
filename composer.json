@@ -10,6 +10,9 @@
             "email": "viktors.nikiforovs@netcore.lv"
         }
     ],
+    "require": {
+        "php": ">=7.0"
+    },
     "extra": {
         "laravel": {
             "providers": [
