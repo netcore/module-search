@@ -42,7 +42,7 @@ class SearchController extends Controller
         // Edit user column - display full name.
         if ($userIdLoggingEnabled) {
             $datatable->editColumn('user', function(SearchLog $searchLog) {
-                return $searchLog->user->fullName;
+                return $searchLog->user ? $searchLog->user->fullName : 'Guest';
             });
         }
 
