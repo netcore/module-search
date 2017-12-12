@@ -364,10 +364,7 @@ class SearchRepository
 
         // Log search query
         if ($this->logsEnabled() && is_null($this->searchQueryLogging)) {
-            SearchLog::create([
-                'query'         => $keyword,
-                'results_found' => $this->totalResultsFound,
-            ]);
+            $this->recordSearchLog($keyword, $this->totalResultsFound);
         }
 
         return $this->returnAsCollection ? collect($results) : $results;
@@ -391,5 +388,20 @@ class SearchRepository
     public function logUserId()
     {
         return (bool)config('netcore.module-search.log_user_ids');
+    }
+
+    /**
+     * Create search log entry.
+     *
+     * @param string $query
+     * @param int $resultsFound
+     * @return mixed
+     */
+    public function recordSearchLog(string $query, int $resultsFound = 0)
+    {
+        return SearchLog::create([
+            'query'         => $query,
+            'results_found' => $resultsFound,
+        ]);
     }
 }
